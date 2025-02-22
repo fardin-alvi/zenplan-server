@@ -8,7 +8,13 @@ const { Server } = require("socket.io");
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+const corsOptions = {
+    origin: "*",
+    methods: ["GET", "POST", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type"],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -25,9 +31,9 @@ const client = new MongoClient(uri, {
     }
 });
 
-client.connect()
-    .then(() => console.log("Connected to MongoDB"))
-    .catch(err => console.error("MongoDB connection failed:", err));
+// client.connect()
+//     .then(() => console.log("Connected to MongoDB"))
+//     .catch(err => console.error("MongoDB connection failed:", err));
 
 const userCollection = client.db("zenplano").collection("users");
 const taskCollection = client.db("zenplano").collection("tasks");
@@ -40,9 +46,15 @@ const io = new Server(server, {
     },
 });
 
+app.post('/users', async (req, res) => {
+    const user = req.body 
+    const result = await userCollection.insertOne(user)
+    res.send()
+})
+
 // Add new task
 app.post("/tasks", async (req, res) => {
-    const { title, description, category } = req.body;
+    const { title, description, category, userEmail } = req.body;
     const order = await taskCollection.countDocuments({ category }) + 1;
 
     const task = {
@@ -50,6 +62,7 @@ app.post("/tasks", async (req, res) => {
         description,
         category,
         order,
+        userEmail,
         createdAt: new Date(),
     };
 
@@ -62,7 +75,17 @@ app.post("/tasks", async (req, res) => {
 
 // Get all tasks sorted by category and order
 app.get("/tasks", async (req, res) => {
-    const tasks = await taskCollection.find().sort({ category: 1, order: 1 }).toArray();
+    const { userEmail } = req.query;
+
+    if (!userEmail) {
+        return res.status(400).send({ error: "User email is required" });
+    }
+
+    const tasks = await taskCollection
+        .find({ userEmail })
+        .sort({ category: 1, order: 1 })
+        .toArray();
+
     res.send(tasks);
 });
 
